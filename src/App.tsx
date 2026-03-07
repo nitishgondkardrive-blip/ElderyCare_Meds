@@ -13,7 +13,8 @@ import {
   Info,
   CalendarDays,
   History as HistoryIcon,
-  Volume2
+  Volume2,
+  Pencil
 } from 'lucide-react';
 import { 
   Medicine, 
@@ -85,6 +86,7 @@ export default function App() {
   const [medicines, setMedicines] = useState<Medicine[]>([]);
   const [takenDoseKeys, setTakenDoseKeys] = useState<string[]>([]); // Array of "medId-time-date"
   const [isAdding, setIsAdding] = useState(false);
+  const [editingMedId, setEditingMedId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'today' | 'history' | 'settings'>('today');
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   
@@ -183,14 +185,52 @@ export default function App() {
   }, [medicines, takenDoseKeys, lastPoppedKey]);
 
   const playReminderSound = (sound: ReminderSound) => {
-    const soundUrls: Record<ReminderSound, string> = {
-      'Chime': 'https://assets.mixkit.co/sfx/preview/mixkit-simple-notification-1522.mp3',
-      'Bell': 'https://assets.mixkit.co/sfx/preview/mixkit-church-bell-single-hit-640.mp3',
-      'Soft Alert': 'https://assets.mixkit.co/sfx/preview/mixkit-soft-notification-sound-2686.mp3',
-      'Digital': 'https://assets.mixkit.co/sfx/preview/mixkit-digital-clock-digital-alarm-buzzer-992.mp3'
-    };
-    const audio = new Audio(soundUrls[sound]);
-    audio.play().catch(e => console.log('Audio play failed:', e));
+    try {
+      const AudioContextClass = (window.AudioContext || (window as any).webkitAudioContext);
+      if (!AudioContextClass) return;
+      
+      const audioCtx = new AudioContextClass();
+      
+      // Resume context if suspended (browser policy)
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+
+      const playNote = (freq: number, start: number, duration: number, type: OscillatorType = 'sine', volume: number = 0.2) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime + start);
+        
+        gain.gain.setValueAtTime(0, audioCtx.currentTime + start);
+        gain.gain.linearRampToValueAtTime(volume, audioCtx.currentTime + start + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + start + duration);
+        
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        
+        osc.start(audioCtx.currentTime + start);
+        osc.stop(audioCtx.currentTime + start + duration);
+      };
+
+      if (sound === 'Chime') {
+        playNote(523.25, 0, 0.5); // C5
+        playNote(659.25, 0.1, 0.5); // E5
+        playNote(783.99, 0.2, 0.5); // G5
+      } else if (sound === 'Bell') {
+        playNote(440, 0, 1.2, 'triangle', 0.3); // A4
+        playNote(880, 0.05, 1.0, 'sine', 0.1); // A5
+      } else if (sound === 'Soft Alert') {
+        playNote(392, 0, 0.4, 'sine', 0.15); // G4
+        playNote(493.88, 0.2, 0.4, 'sine', 0.15); // B4
+      } else if (sound === 'Digital') {
+        playNote(1200, 0, 0.1, 'square', 0.1);
+        playNote(1200, 0.15, 0.1, 'square', 0.1);
+      }
+    } catch (e) {
+      console.error('Audio generation failed:', e);
+    }
   };
   const calculateAge = (dob: string) => {
     if (!dob) return 0;
@@ -263,40 +303,91 @@ export default function App() {
     setNewTimes(updated);
   };
 
-  const handleAddMedicine = (e: React.FormEvent) => {
+  const handleSaveMedicine = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName || !newDosage) return;
 
-    const newMed: Medicine = {
-      id: Date.now().toString(),
-      name: newName,
-      dosage: newDosage,
-      times: newTimes,
-      timeOfDay: getTimeOfDay(newTimes[0]),
-      image: newImage,
-      shape: newShape,
-      color: newColor,
-      usage: newUsage,
-      frequency: newFrequency,
-      schedule: {
-        type: newScheduleType,
-        specificDays: newScheduleType === 'Specific Days of Week' ? newSpecificDays : undefined,
-        interval: newScheduleType === 'Days Interval' ? newInterval : undefined,
-        startDate: newStartDate,
-        endDateType: newEndDateType,
-        durationDays: newEndDateType === 'Duration' ? newDurationDays : undefined,
-        endDate: newEndDateType === 'Date' ? newEndDate : undefined,
-      },
-      taken: false,
-      reminderSound: newReminderSound
-    };
+    if (editingMedId) {
+      setMedicines(medicines.map(m => m.id === editingMedId ? {
+        ...m,
+        name: newName,
+        dosage: newDosage,
+        times: newTimes,
+        timeOfDay: getTimeOfDay(newTimes[0]),
+        image: newImage,
+        shape: newShape,
+        color: newColor,
+        usage: newUsage,
+        frequency: newFrequency,
+        schedule: {
+          type: newScheduleType,
+          specificDays: newScheduleType === 'Specific Days of Week' ? newSpecificDays : undefined,
+          interval: newScheduleType === 'Days Interval' ? newInterval : undefined,
+          startDate: newStartDate,
+          endDateType: newEndDateType,
+          durationDays: newEndDateType === 'Duration' ? newDurationDays : undefined,
+          endDate: newEndDateType === 'Date' ? newEndDate : undefined,
+        },
+        reminderSound: newReminderSound
+      } : m));
+    } else {
+      const newMed: Medicine = {
+        id: Date.now().toString(),
+        name: newName,
+        dosage: newDosage,
+        times: newTimes,
+        timeOfDay: getTimeOfDay(newTimes[0]),
+        image: newImage,
+        shape: newShape,
+        color: newColor,
+        usage: newUsage,
+        frequency: newFrequency,
+        schedule: {
+          type: newScheduleType,
+          specificDays: newScheduleType === 'Specific Days of Week' ? newSpecificDays : undefined,
+          interval: newScheduleType === 'Days Interval' ? newInterval : undefined,
+          startDate: newStartDate,
+          endDateType: newEndDateType,
+          durationDays: newEndDateType === 'Duration' ? newDurationDays : undefined,
+          endDate: newEndDateType === 'Date' ? newEndDate : undefined,
+        },
+        taken: false,
+        reminderSound: newReminderSound
+      };
+      setMedicines([...medicines, newMed]);
+    }
 
-    setMedicines([...medicines, newMed]);
     setIsAdding(false);
     resetForm();
   };
 
+  const handleEditMed = (medId: string) => {
+    const med = medicines.find(m => m.id === medId);
+    if (!med) return;
+
+    setEditingMedId(med.id);
+    setNewName(med.name);
+    setNewDosage(med.dosage);
+    setNewImage(med.image);
+    setNewShape(med.shape);
+    setNewColor(med.color);
+    setNewUsage(med.usage);
+    setNewFrequency(med.frequency);
+    setNewTimes(med.times);
+    setNewReminderSound(med.reminderSound);
+    setNewScheduleType(med.schedule.type);
+    setNewSpecificDays(med.schedule.specificDays || [1, 2, 3, 4, 5]);
+    setNewInterval(med.schedule.interval || 2);
+    setNewStartDate(med.schedule.startDate);
+    setNewEndDateType(med.schedule.endDateType);
+    setNewDurationDays(med.schedule.durationDays || 7);
+    setNewEndDate(med.schedule.endDate || '');
+    
+    setIsAdding(true);
+  };
+
   const resetForm = () => {
+    setEditingMedId(null);
     setNewName('');
     setNewDosage('');
     setNewImage(undefined);
@@ -408,11 +499,9 @@ export default function App() {
       <header className="bg-white px-6 pt-12 pb-6 shadow-sm rounded-b-[2.5rem]">
         <div className="flex justify-between items-end">
           <div className="flex items-center gap-4">
-            {userProfile?.photo && (
-              <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-indigo-100 shadow-sm">
-                <img src={userProfile.photo} alt={userProfile.name} className="w-full h-full object-cover" />
-              </div>
-            )}
+            <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-200">
+              <Pill size={28} className="text-white" />
+            </div>
             <div>
               <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
                 {activeTab === 'today' ? 'Upcoming' : activeTab === 'history' ? 'History' : 'Settings'}
@@ -486,7 +575,13 @@ export default function App() {
                           </p>
                         </div>
 
-                        <div className="flex flex-col justify-center">
+                        <div className="flex flex-col justify-center gap-2">
+                          <button
+                            onClick={() => handleEditMed(dose.medicineId)}
+                            className="w-12 h-12 rounded-full bg-slate-50 text-slate-400 border-2 border-slate-100 flex items-center justify-center active:scale-90 transition-all"
+                          >
+                            <Pencil size={20} />
+                          </button>
                           <button
                             onClick={() => toggleTaken(dose.id)}
                             className="w-16 h-16 rounded-full bg-slate-100 text-slate-400 border-4 border-slate-200 flex items-center justify-center active:scale-90 transition-all"
@@ -568,6 +663,50 @@ export default function App() {
               exit={{ opacity: 0, y: -20 }}
               className="space-y-8"
             >
+              <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100">
+                <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
+                  <div className="w-2 h-8 bg-indigo-500 rounded-full" />
+                  My Medicines
+                </h2>
+                <div className="space-y-4">
+                  {medicines.length > 0 ? (
+                    medicines.map(med => (
+                      <div key={med.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center border border-slate-200 overflow-hidden">
+                            {med.image ? (
+                              <img src={med.image} alt={med.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <PillVisual shape={med.shape} color={med.color} size="sm" />
+                            )}
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-slate-900">{med.name}</h4>
+                            <p className="text-xs text-slate-500 font-medium">{med.dosage} • {med.frequency}</p>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => handleEditMed(med.id)}
+                            className="p-2 bg-white text-indigo-600 rounded-xl shadow-sm border border-indigo-50"
+                          >
+                            <Pencil size={18} />
+                          </button>
+                          <button 
+                            onClick={() => deleteMed(med.id)}
+                            className="p-2 bg-white text-red-500 rounded-xl shadow-sm border border-red-50"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-center text-slate-400 py-4 font-medium">No medicines added yet.</p>
+                  )}
+                </div>
+              </div>
+
               <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100">
                 <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
                   <div className="w-2 h-8 bg-indigo-500 rounded-full" />
@@ -659,11 +798,11 @@ export default function App() {
               className="bg-white w-full max-w-md rounded-t-[2.5rem] p-8 space-y-8 shadow-2xl overflow-y-auto max-h-[95vh]"
             >
               <div className="flex justify-between items-center sticky top-0 bg-white pb-4 z-10">
-                <h2 className="text-2xl font-bold text-slate-900">Add Medicine</h2>
-                <button onClick={() => setIsAdding(false)} className="p-2 bg-slate-100 rounded-full text-slate-500"><X size={24} /></button>
+                <h2 className="text-2xl font-bold text-slate-900">{editingMedId ? 'Edit Medicine' : 'Add Medicine'}</h2>
+                <button onClick={() => { setIsAdding(false); resetForm(); }} className="p-2 bg-slate-100 rounded-full text-slate-500"><X size={24} /></button>
               </div>
 
-              <form onSubmit={handleAddMedicine} className="space-y-10 pb-10">
+              <form onSubmit={handleSaveMedicine} className="space-y-10 pb-10">
                 {/* Basic Info */}
                 <section className="space-y-6">
                   <div className="flex flex-col items-center space-y-3">
