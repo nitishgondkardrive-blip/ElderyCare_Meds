@@ -1,0 +1,5 @@
+{
+  "name": "ElderlyCare Meds",
+  "description": "A simple, high-contrast medicine reminder app with large tiles designed for elderly users.",
+  "requestFramePermissions": ["camera"]
+}
