@@ -132,12 +132,54 @@ export default function App() {
       try {
         const status = await LocalNotifications.requestPermissions();
         console.log('Notification permission status:', status);
+        
+        // Create a high-importance channel for Android
+        await LocalNotifications.createChannel({
+          id: 'medication-reminders',
+          name: 'Medication Reminders',
+          description: 'Critical reminders for taking your medicine',
+          importance: 5, // Max importance for sound and heads-up
+          visibility: 1, // Show on lock screen
+          vibration: true,
+          sound: 'res://default' // Use system default sound for reliability
+        });
       } catch (e) {
         console.warn('LocalNotifications not available', e);
       }
     };
     requestPermissions();
-  }, []);
+
+    // Listener for when a notification is clicked
+    const actionListener = LocalNotifications.addListener('localNotificationActionPerformed', (notificationAction) => {
+      const { medId, time, date } = notificationAction.notification.extra;
+      if (medId && time && date) {
+        const med = medicines.find(m => m.id === medId);
+        if (med) {
+          const doseId = `${medId}-${time}-${date}`;
+          const dose: Dose = {
+            id: doseId,
+            medicineId: med.id,
+            name: med.name,
+            dosage: med.dosage,
+            time: time,
+            timeOfDay: getTimeOfDay(time),
+            image: med.image,
+            shape: med.shape,
+            color: med.color,
+            usage: med.usage,
+            taken: takenDoseKeys.includes(doseId),
+            date: date
+          };
+          setDueDose(dose);
+          setActiveTab('today');
+        }
+      }
+    });
+
+    return () => {
+      actionListener.then(l => l.remove());
+    };
+  }, [medicines, takenDoseKeys]);
 
   useEffect(() => {
     const savedMeds = localStorage.getItem('elderly_meds_v3');
@@ -191,7 +233,8 @@ export default function App() {
                     body: `Take ${med.dosage} (${med.usage})`,
                     id: Math.floor(Math.random() * 1000000),
                     schedule: { at: scheduleDate, allowWhileIdle: true },
-                    sound: 'beep.wav',
+                    sound: 'res://default',
+                    channelId: 'medication-reminders',
                     extra: { medId: med.id, time, date: dateStr }
                   });
                 }

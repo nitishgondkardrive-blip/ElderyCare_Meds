@@ -49,5 +49,15 @@ npx @capacitor/cli open android
 - Transfer the `app-debug.apk` file to your Android phone.
 - Open the file on your phone to install it (you may need to allow "Install from unknown sources" in your phone settings).
 
+## 7. Troubleshooting Reminders & Sound
+If you don't hear the reminder sound or see popups:
+1. **Check Notification Volume**: Ensure your phone's "Notification" or "Ring" volume is turned up.
+2. **Check "Do Not Disturb"**: Make sure your phone is not in "Do Not Disturb" mode.
+3. **App Permissions**: On your phone, go to **Settings > Apps > ElderlyCare Meds > Notifications** and ensure:
+   - "Allow Notifications" is ON.
+   - "Medication Reminders" channel is set to **"Alerting"** or **"High"** importance.
+   - "Allow sound and vibration" is enabled.
+4. **Battery Optimization**: Some phones (like Samsung/Xiaomi) kill background apps. Go to **Settings > Apps > ElderlyCare Meds > Battery** and set it to **"Unrestricted"** for the most reliable reminders.
+
 ---
-*Note: Permissions for Camera and Notifications are already configured in the source code.*
+*Note: I have configured a "High Importance" channel that forces the phone to show a "Heads-up" popup and play the default system sound even when locked.*
