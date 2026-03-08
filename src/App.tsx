@@ -44,6 +44,7 @@ interface Dose {
   usage: UsageInstruction;
   taken: boolean;
   date: string; // YYYY-MM-DD
+  additionalInstructions?: string;
 }
 
 const PillVisual = ({ shape, color, size = 'md' }: { shape: PillShape, color: PillColor, size?: 'sm' | 'md' }) => {
@@ -113,6 +114,7 @@ export default function App() {
   const [newFrequency, setNewFrequency] = useState<FrequencyType>('Once Daily');
   const [newTimes, setNewTimes] = useState<string[]>(['08:00']);
   const [newReminderSound, setNewReminderSound] = useState<ReminderSound>('Chime');
+  const [newAdditionalInstructions, setNewAdditionalInstructions] = useState('');
   
   const [newScheduleType, setNewScheduleType] = useState<ScheduleType>('Every Day');
   const [newSpecificDays, setNewSpecificDays] = useState<number[]>([1, 2, 3, 4, 5]);
@@ -168,7 +170,8 @@ export default function App() {
             color: med.color,
             usage: med.usage,
             taken: takenDoseKeys.includes(doseId),
-            date: date
+            date: date,
+            additionalInstructions: med.additionalInstructions
           };
           setDueDose(dose);
           setActiveTab('today');
@@ -306,7 +309,8 @@ export default function App() {
                 color: med.color,
                 usage: med.usage,
                 taken: false,
-                date: todayStr
+                date: todayStr,
+                additionalInstructions: med.additionalInstructions
               };
               setDueDose(dose);
               setLastPoppedKey(doseId);
@@ -465,7 +469,8 @@ export default function App() {
           durationDays: newEndDateType === 'Duration' ? newDurationDays : undefined,
           endDate: newEndDateType === 'Date' ? newEndDate : undefined,
         },
-        reminderSound: newReminderSound
+        reminderSound: newReminderSound,
+        additionalInstructions: newAdditionalInstructions
       } : m));
     } else {
       const newMed: Medicine = {
@@ -489,7 +494,8 @@ export default function App() {
           endDate: newEndDateType === 'Date' ? newEndDate : undefined,
         },
         taken: false,
-        reminderSound: newReminderSound
+        reminderSound: newReminderSound,
+        additionalInstructions: newAdditionalInstructions
       };
       setMedicines([...medicines, newMed]);
     }
@@ -512,6 +518,7 @@ export default function App() {
     setNewFrequency(med.frequency);
     setNewTimes(med.times);
     setNewReminderSound(med.reminderSound);
+    setNewAdditionalInstructions(med.additionalInstructions || '');
     setNewScheduleType(med.schedule.type);
     setNewSpecificDays(med.schedule.specificDays || [1, 2, 3, 4, 5]);
     setNewInterval(med.schedule.interval || 2);
@@ -534,6 +541,7 @@ export default function App() {
     setNewFrequency('Once Daily');
     setNewTimes(['08:00']);
     setNewReminderSound('Chime');
+    setNewAdditionalInstructions('');
     setNewScheduleType('Every Day');
     setNewSpecificDays([1, 2, 3, 4, 5]);
     setNewInterval(2);
@@ -650,7 +658,8 @@ export default function App() {
             color: med.color,
             usage: med.usage,
             taken: takenDoseKeys.includes(doseId),
-            date: todayStr
+            date: todayStr,
+            additionalInstructions: med.additionalInstructions
           });
         });
       }
@@ -672,20 +681,20 @@ export default function App() {
   const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   return (
-    <div className="min-h-screen w-full max-w-md mx-auto bg-slate-50 flex flex-col font-sans overflow-x-hidden">
+    <div className="h-screen w-full max-w-md mx-auto bg-slate-50 flex flex-col font-sans overflow-x-hidden">
       {/* Header */}
-      <header className="bg-white px-6 pt-12 pb-6 shadow-sm rounded-b-[2.5rem]">
+      <header className="bg-white px-6 pt-12 pb-6 shadow-sm rounded-b-[2.5rem] flex-shrink-0">
         <div className="flex justify-between items-end">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-200">
               <Pill size={28} className="text-white" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
-                {activeTab === 'today' ? 'Upcoming' : activeTab === 'history' ? 'History' : 'Settings'}
+              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+                {activeTab === 'today' ? 'Med Reminders' : activeTab === 'history' ? 'History' : 'Settings'}
               </h1>
               <p className="text-slate-500 font-medium mt-1">
-                {activeTab === 'settings' ? 'Manage your profile' : new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                {activeTab === 'settings' ? 'Manage your settings' : new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
               </p>
             </div>
           </div>
@@ -751,6 +760,11 @@ export default function App() {
                           <p className="text-slate-500 font-bold text-lg">
                             {dose.dosage}
                           </p>
+                          {dose.additionalInstructions && (
+                            <p className="text-slate-400 text-xs mt-2 italic line-clamp-2">
+                              {dose.additionalInstructions}
+                            </p>
+                          )}
                         </div>
 
                         <div className="flex flex-col justify-center gap-2">
@@ -1163,6 +1177,25 @@ export default function App() {
                       <label className="text-sm font-bold text-slate-500 uppercase tracking-wider ml-1">Dosage</label>
                       <input type="text" placeholder="e.g. 1 Tablet" value={newDosage} onChange={(e) => setNewDosage(e.target.value)} className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 focus:bg-white rounded-2xl p-4 text-lg font-medium outline-none transition-all" required />
                     </div>
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-end ml-1">
+                        <label className="text-sm font-bold text-slate-500 uppercase tracking-wider">Additional Instructions</label>
+                        <span className={`text-[10px] font-bold ${newAdditionalInstructions.split(/\s+/).filter(Boolean).length > 200 ? 'text-red-500' : 'text-slate-400'}`}>
+                          {newAdditionalInstructions.split(/\s+/).filter(Boolean).length} / 200 words
+                        </span>
+                      </div>
+                      <textarea 
+                        placeholder="e.g. Take with a full glass of water. Do not crush." 
+                        value={newAdditionalInstructions} 
+                        onChange={(e) => {
+                          const words = e.target.value.split(/\s+/).filter(Boolean);
+                          if (words.length <= 200 || e.target.value.length < newAdditionalInstructions.length) {
+                            setNewAdditionalInstructions(e.target.value);
+                          }
+                        }} 
+                        className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 focus:bg-white rounded-2xl p-4 text-lg font-medium outline-none transition-all min-h-[120px] resize-none"
+                      />
+                    </div>
                   </div>
                 </section>
 
@@ -1272,7 +1305,7 @@ export default function App() {
       </AnimatePresence>
 
       {/* Bottom Nav */}
-      <nav className="bg-white border-t border-slate-100 px-8 py-4 flex justify-around items-center safe-bottom">
+      <nav className="bg-white border-t border-slate-100 px-8 py-4 flex justify-around items-center safe-bottom flex-shrink-0">
         <button 
           onClick={() => setActiveTab('today')}
           className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'today' ? 'text-indigo-600' : 'text-slate-300'}`}
@@ -1300,7 +1333,7 @@ export default function App() {
               </div>
             )}
           </div>
-          <span className="text-[10px] font-bold uppercase tracking-widest">Profile</span>
+          <span className="text-[10px] font-bold uppercase tracking-widest">Settings</span>
         </button>
       </nav>
 
@@ -1339,6 +1372,13 @@ export default function App() {
                   <h3 className="text-xl font-bold text-slate-900">{dueDose.name}</h3>
                   <p className="text-indigo-600 font-black">{dueDose.dosage}</p>
                   <p className="text-slate-400 text-xs font-bold uppercase mt-1">{dueDose.usage}</p>
+                  {dueDose.additionalInstructions && (
+                    <div className="mt-2 p-3 bg-indigo-50/50 rounded-xl border border-indigo-100/50">
+                      <p className="text-slate-600 text-[11px] italic leading-relaxed">
+                        "{dueDose.additionalInstructions}"
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 

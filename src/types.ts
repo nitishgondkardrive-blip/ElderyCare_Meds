@@ -34,6 +34,7 @@ export interface Medicine {
   frequency: FrequencyType;
   taken?: boolean;
   reminderSound: ReminderSound;
+  additionalInstructions?: string;
 }
 
 export const TIME_OF_DAY_ORDER: TimeOfDay[] = ['Morning', 'Afternoon', 'Evening', 'Night'];
