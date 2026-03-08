@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ElderlyCare Meds</string>
+    <string name="title_activity_main">ElderlyCare Meds</string>
+    <string name="package_name">com.elderlycare.meds</string>
+    <string name="custom_url_scheme">com.elderlycare.meds</string>
+</resources>
