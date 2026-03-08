@@ -19,6 +19,9 @@ Run the following commands in your terminal:
 # Install all required packages
 npm install
 
+# Ensure Capacitor CLI is available
+npm install -D @capacitor/cli
+
 # Build the web application
 npm run build
 
