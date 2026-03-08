@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { LocalNotifications } from '@capacitor/local-notifications';
 import { 
   Plus, 
   Clock, 
@@ -87,6 +88,7 @@ export default function App() {
   const [takenDoseKeys, setTakenDoseKeys] = useState<string[]>([]); // Array of "medId-time-date"
   const [isAdding, setIsAdding] = useState(false);
   const [editingMedId, setEditingMedId] = useState<string | null>(null);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'today' | 'history' | 'settings'>('today');
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   
@@ -120,6 +122,20 @@ export default function App() {
 
   const medFileInputRef = useRef<HTMLInputElement>(null);
   const profileFileInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const requestPermissions = async () => {
+      try {
+        const status = await LocalNotifications.requestPermissions();
+        console.log('Notification permission status:', status);
+      } catch (e) {
+        console.warn('LocalNotifications not available', e);
+      }
+    };
+    requestPermissions();
+  }, []);
 
   useEffect(() => {
     const savedMeds = localStorage.getItem('elderly_meds_v3');
@@ -142,21 +158,76 @@ export default function App() {
     if (userProfile) {
       localStorage.setItem('elderly_meds_profile_v3', JSON.stringify(userProfile));
     }
+    
+    // Schedule system notifications
+    const syncNotifications = async () => {
+      try {
+        const pending = await LocalNotifications.getPending();
+        if (pending.notifications.length > 0) {
+          await LocalNotifications.cancel({ notifications: pending.notifications });
+        }
+
+        const notifications = [];
+        const today = new Date();
+        
+        // Schedule for the next 3 days
+        for (let i = 0; i < 3; i++) {
+          const date = new Date(today);
+          date.setDate(today.getDate() + i);
+          const dateStr = date.toISOString().split('T')[0];
+
+          medicines.forEach(med => {
+            if (isMedScheduledForDate(med, dateStr)) {
+              med.times.forEach(time => {
+                const [hour, minute] = time.split(':').map(Number);
+                const scheduleDate = new Date(date);
+                scheduleDate.setHours(hour, minute, 0, 0);
+
+                if (scheduleDate > new Date()) {
+                  notifications.push({
+                    title: `💊 Time for ${med.name}`,
+                    body: `Take ${med.dosage} (${med.usage})`,
+                    id: Math.floor(Math.random() * 1000000),
+                    schedule: { at: scheduleDate, allowWhileIdle: true },
+                    sound: 'beep.wav',
+                    extra: { medId: med.id, time, date: dateStr }
+                  });
+                }
+              });
+            }
+          });
+        }
+
+        if (notifications.length > 0) {
+          await LocalNotifications.schedule({ notifications });
+        }
+      } catch (e) {
+        console.warn('Failed to schedule notifications', e);
+      }
+    };
+    syncNotifications();
   }, [medicines, takenDoseKeys, userProfile]);
 
   useEffect(() => {
     const checkDoses = () => {
       const now = new Date();
       const todayStr = now.toISOString().split('T')[0];
-      const currentTime = now.toTimeString().slice(0, 5); // HH:MM
       
       medicines.forEach(med => {
         if (isMedScheduledForDate(med, todayStr)) {
           med.times.forEach(time => {
             const doseId = `${med.id}-${time}-${todayStr}`;
-            // If it's exactly the time, not taken, and not already popped
-            if (time === currentTime && !takenDoseKeys.includes(doseId) && lastPoppedKey !== doseId) {
-              // Find the dose details
+            const [hour, minute] = time.split(':').map(Number);
+            const doseTime = new Date(now);
+            doseTime.setHours(hour, minute, 0, 0);
+
+            const diffMinutes = (now.getTime() - doseTime.getTime()) / (1000 * 60);
+            
+            // Trigger if:
+            // 1. It's past the time but within the last 2 minutes (catch-up)
+            // 2. AND it's not taken
+            // 3. AND it hasn't been popped in this session
+            if (diffMinutes >= 0 && diffMinutes < 2 && !takenDoseKeys.includes(doseId) && lastPoppedKey !== doseId) {
               const dose: Dose = {
                 id: doseId,
                 medicineId: med.id,
@@ -451,6 +522,47 @@ export default function App() {
     }
   };
 
+  const startCamera = async () => {
+    setIsCameraOpen(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'environment' }, 
+        audio: false 
+      });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      console.error("Error accessing camera:", err);
+      setIsCameraOpen(false);
+      alert("Could not access camera. Please check permissions.");
+    }
+  };
+
+  const stopCamera = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => track.stop());
+    }
+    setIsCameraOpen(false);
+  };
+
+  const capturePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg');
+        setNewImage(dataUrl);
+        stopCamera();
+      }
+    }
+  };
+
   // Generate doses for today
   const allTodayDoses = useMemo(() => {
     const todayStr = new Date().toISOString().split('T')[0];
@@ -494,7 +606,7 @@ export default function App() {
   const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   return (
-    <div className="min-h-screen max-w-md mx-auto bg-slate-50 flex flex-col font-sans">
+    <div className="min-h-screen w-full max-w-md mx-auto bg-slate-50 flex flex-col font-sans overflow-x-hidden">
       {/* Header */}
       <header className="bg-white px-6 pt-12 pb-6 shadow-sm rounded-b-[2.5rem]">
         <div className="flex justify-between items-end">
@@ -558,7 +670,7 @@ export default function App() {
                           )}
                         </div>
 
-                        <div className="flex-1 flex flex-col justify-center">
+                        <div className="flex-1 flex flex-col justify-center min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                             <span className="text-indigo-600 font-black text-base">
                               {dose.time}
@@ -631,7 +743,7 @@ export default function App() {
                           <PillVisual shape={dose.shape} color={dose.color} size="sm" />
                         )}
                       </div>
-                      <div className="flex-1">
+                      <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-emerald-600 font-bold text-sm">{dose.time}</span>
                           <span className="text-[10px] font-bold text-emerald-400 uppercase">Taken on {new Date(dose.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
@@ -672,17 +784,17 @@ export default function App() {
                   {medicines.length > 0 ? (
                     medicines.map(med => (
                       <div key={med.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                        <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center border border-slate-200 overflow-hidden">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-12 h-12 rounded-xl bg-white flex-shrink-0 flex items-center justify-center border border-slate-200 overflow-hidden">
                             {med.image ? (
                               <img src={med.image} alt={med.name} className="w-full h-full object-cover" />
                             ) : (
                               <PillVisual shape={med.shape} color={med.color} size="sm" />
                             )}
                           </div>
-                          <div>
-                            <h4 className="font-bold text-slate-900">{med.name}</h4>
-                            <p className="text-xs text-slate-500 font-medium">{med.dosage} • {med.frequency}</p>
+                          <div className="min-w-0">
+                            <h4 className="font-bold text-slate-900 truncate">{med.name}</h4>
+                            <p className="text-xs text-slate-500 font-medium truncate">{med.dosage} • {med.frequency}</p>
                           </div>
                         </div>
                         <div className="flex gap-2">
@@ -805,17 +917,91 @@ export default function App() {
               <form onSubmit={handleSaveMedicine} className="space-y-10 pb-10">
                 {/* Basic Info */}
                 <section className="space-y-6">
-                  <div className="flex flex-col items-center space-y-3">
-                    <div onClick={() => medFileInputRef.current?.click()} className="w-32 h-32 rounded-3xl bg-slate-50 border-2 border-dashed border-slate-200 flex flex-col items-center justify-center cursor-pointer overflow-hidden group hover:border-indigo-300 transition-colors">
-                      {newImage ? <img src={newImage} alt="Preview" className="w-full h-full object-cover" /> : (
-                        <div className="flex flex-col items-center">
-                          <PillVisual shape={newShape} color={newColor} />
-                          <span className="text-[10px] font-bold text-slate-400 mt-4">Change Photo</span>
-                        </div>
+                  <div className="flex flex-col items-center space-y-4">
+                    <div className="relative group">
+                      <div 
+                        onClick={() => medFileInputRef.current?.click()} 
+                        className="w-40 h-40 rounded-[2.5rem] bg-slate-50 border-2 border-dashed border-slate-200 flex flex-col items-center justify-center cursor-pointer overflow-hidden hover:border-indigo-300 transition-all shadow-inner"
+                      >
+                        {newImage ? <img src={newImage} alt="Preview" className="w-full h-full object-cover" /> : (
+                          <div className="flex flex-col items-center">
+                            <PillVisual shape={newShape} color={newColor} />
+                            <span className="text-[10px] font-bold text-slate-400 mt-4 uppercase tracking-widest">Medicine Photo</span>
+                          </div>
+                        )}
+                      </div>
+                      {newImage && (
+                        <button 
+                          type="button"
+                          onClick={() => setNewImage(undefined)}
+                          className="absolute -top-2 -right-2 bg-red-500 text-white p-2 rounded-full shadow-lg"
+                        >
+                          <X size={16} />
+                        </button>
                       )}
                     </div>
+
+                    <div className="flex gap-3 w-full">
+                      <button 
+                        type="button"
+                        onClick={() => medFileInputRef.current?.click()}
+                        className="flex-1 bg-slate-100 text-slate-600 py-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-all"
+                      >
+                        <Plus size={18} />
+                        Upload
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={startCamera}
+                        className="flex-1 bg-indigo-50 text-indigo-600 py-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-all border border-indigo-100"
+                      >
+                        <Camera size={18} />
+                        Take Photo
+                      </button>
+                    </div>
+                    
                     <input type="file" ref={medFileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
                   </div>
+
+                  {/* Camera Modal */}
+                  <AnimatePresence>
+                    {isCameraOpen && (
+                      <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 bg-black z-[100] flex flex-col"
+                      >
+                        <div className="flex-1 relative overflow-hidden">
+                          <video 
+                            ref={videoRef} 
+                            autoPlay 
+                            playsInline 
+                            className="w-full h-full object-cover"
+                          />
+                          <canvas ref={canvasRef} className="hidden" />
+                          
+                          <button 
+                            onClick={stopCamera}
+                            className="absolute top-8 right-6 p-3 bg-white/20 backdrop-blur-md rounded-full text-white"
+                          >
+                            <X size={24} />
+                          </button>
+                        </div>
+                        
+                        <div className="bg-black p-10 flex flex-col items-center gap-8">
+                          <div className="text-white/60 text-xs font-bold uppercase tracking-widest">Center the medicine in the frame</div>
+                          <button 
+                            onClick={capturePhoto}
+                            className="w-20 h-20 rounded-full border-4 border-white p-1"
+                          >
+                            <div className="w-full h-full bg-white rounded-full active:scale-90 transition-transform" />
+                          </button>
+                          <div className="h-4" />
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
 
                   {/* Shape & Color Selection */}
                   {!newImage && (
