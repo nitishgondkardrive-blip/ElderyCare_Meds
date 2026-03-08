@@ -26,14 +26,14 @@ npm install -D @capacitor/cli
 npm run build
 
 # Synchronize the code with the Android project
-npx cap sync android
+npx @capacitor/cli sync android
 ```
 
 ## 4. Open in Android Studio
 Run this command to open the project in Android Studio:
 
 ```bash
-npx cap open android
+npx @capacitor/cli open android
 ```
 
 ## 5. Generate the APK in Android Studio
