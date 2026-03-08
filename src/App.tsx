@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { LocalNotifications } from '@capacitor/local-notifications';
+import { App as CapApp } from '@capacitor/app';
 import { 
   Plus, 
   Clock, 
@@ -91,6 +92,7 @@ export default function App() {
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'today' | 'history' | 'settings'>('today');
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
   
   // Profile Form State
   const [profileName, setProfileName] = useState('');
@@ -207,6 +209,27 @@ export default function App() {
     };
     syncNotifications();
   }, [medicines, takenDoseKeys, userProfile]);
+
+  useEffect(() => {
+    const backListener = CapApp.addListener('backButton', () => {
+      if (isCameraOpen) {
+        stopCamera();
+      } else if (isAdding) {
+        setIsAdding(false);
+        resetForm();
+      } else if (dueDose) {
+        setDueDose(null);
+      } else if (activeTab !== 'today') {
+        setActiveTab('today');
+      } else {
+        setShowExitConfirm(true);
+      }
+    });
+
+    return () => {
+      backListener.then(l => l.remove());
+    };
+  }, [isCameraOpen, isAdding, dueDose, activeTab]);
 
   useEffect(() => {
     const checkDoses = () => {
@@ -892,6 +915,47 @@ export default function App() {
           )}
         </AnimatePresence>
       </main>
+
+      {/* Exit Confirmation Modal */}
+      <AnimatePresence>
+        {showExitConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-6"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white w-full max-w-xs rounded-[2.5rem] p-8 space-y-6 shadow-2xl text-center"
+            >
+              <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto">
+                <X size={40} className="text-red-500" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-2xl font-bold text-slate-900">Exit App?</h3>
+                <p className="text-slate-500">Are you sure you want to close the application?</p>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowExitConfirm(false)}
+                  className="flex-1 bg-slate-100 text-slate-600 py-4 rounded-2xl font-bold active:scale-95 transition-all"
+                >
+                  No
+                </button>
+                <button
+                  onClick={() => CapApp.exitApp()}
+                  className="flex-1 bg-red-500 text-white py-4 rounded-2xl font-bold shadow-lg shadow-red-100 active:scale-95 transition-all"
+                >
+                  Yes
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Add Medicine Modal */}
       <AnimatePresence>
