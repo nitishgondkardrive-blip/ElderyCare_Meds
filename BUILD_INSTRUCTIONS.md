@@ -60,6 +60,8 @@ If you don't hear the reminder sound or see popups:
 4. **Aggressive Alerting**: I have added a **looping sound and vibration** that repeats every 4 seconds when the app is open and a dose is due. This will continue until you click "I've Taken It" or "Snooze".
 5. **Snooze Feature**: You can now click **"Snooze (5 mins)"** to dismiss the alert temporarily. The app will remind you again in 5 minutes.
 6. **Battery Optimization**: Some phones (like Samsung/Xiaomi) kill background apps. Go to **Settings > Apps > ElderlyCare Meds > Battery** and set it to **"Unrestricted"** for the most reliable reminders.
+7. **Test Your Setup**: I have added a **"Test Notification (10s)"** button in the **Settings** tab. Click it, then lock your phone. If you receive the notification after 10 seconds, your background reminders are working correctly!
+8. **Phone Restart**: I have added permissions to ensure reminders persist even after you restart your phone.
 
 ---
 *Note: I have configured a "High Importance" channel that forces the phone to show a "Heads-up" popup and play the default system sound even when locked. The in-app popup is now high-contrast RED for maximum visibility.*

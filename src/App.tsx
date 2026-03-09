@@ -180,8 +180,40 @@ export default function App() {
       }
     });
 
+    // Listener for when a notification is received while app is in foreground
+    const receivedListener = LocalNotifications.addListener('localNotificationReceived', (notification) => {
+      const { medId, time, date } = notification.extra;
+      if (medId && time && date) {
+        const med = medicines.find(m => m.id === medId);
+        if (med) {
+          const doseId = `${medId}-${time}-${date}`;
+          if (!takenDoseKeys.includes(doseId)) {
+            const dose: Dose = {
+              id: doseId,
+              medicineId: med.id,
+              name: med.name,
+              dosage: med.dosage,
+              time: time,
+              timeOfDay: getTimeOfDay(time),
+              image: med.image,
+              shape: med.shape,
+              color: med.color,
+              usage: med.usage,
+              taken: false,
+              date: date,
+              additionalInstructions: med.additionalInstructions
+            };
+            setDueDose(dose);
+            setLastPoppedKey(doseId);
+            startAlerting(med.reminderSound);
+          }
+        }
+      }
+    });
+
     return () => {
       actionListener.then(l => l.remove());
+      receivedListener.then(l => l.remove());
     };
   }, [medicines, takenDoseKeys]);
 
@@ -226,16 +258,20 @@ export default function App() {
 
           medicines.forEach(med => {
             if (isMedScheduledForDate(med, dateStr)) {
-              med.times.forEach(time => {
+              med.times.forEach((time, timeIdx) => {
                 const [hour, minute] = time.split(':').map(Number);
                 const scheduleDate = new Date(date);
                 scheduleDate.setHours(hour, minute, 0, 0);
 
                 if (scheduleDate > new Date()) {
+                  // Create a deterministic ID: medId(last 4 digits) + dayOffset + timeIdx
+                  const medShortId = parseInt(med.id.slice(-4)) || 0;
+                  const notificationId = (medShortId * 100) + (i * 10) + timeIdx;
+                  
                   notifications.push({
                     title: `💊 Time for ${med.name}`,
                     body: `Take ${med.dosage} (${med.usage})`,
-                    id: Math.floor(Math.random() * 1000000),
+                    id: notificationId,
                     schedule: { at: scheduleDate, allowWhileIdle: true },
                     sound: 'res://default',
                     channelId: 'medication-reminders',
@@ -990,7 +1026,29 @@ export default function App() {
 
               <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100 opacity-50">
                 <h2 className="text-xl font-bold text-slate-800 mb-4">App Settings</h2>
-                <p className="text-slate-500 text-sm">Version 3.1.0 (ElderlyCare Meds)</p>
+                <div className="space-y-4">
+                  <p className="text-slate-500 text-sm">Version 3.2.0 (ElderlyCare Meds)</p>
+                  <button 
+                    onClick={async () => {
+                      const testTime = new Date();
+                      testTime.setSeconds(testTime.getSeconds() + 10);
+                      await LocalNotifications.schedule({
+                        notifications: [{
+                          title: "🔔 Test Reminder",
+                          body: "This is a test to verify notifications are working.",
+                          id: 999999,
+                          schedule: { at: testTime, allowWhileIdle: true },
+                          sound: 'res://default',
+                          channelId: 'medication-reminders'
+                        }]
+                      });
+                      alert("Test notification scheduled for 10 seconds from now. Please lock your phone to test.");
+                    }}
+                    className="w-full bg-slate-100 text-indigo-600 py-3 rounded-2xl font-bold text-sm"
+                  >
+                    Test Notification (10s)
+                  </button>
+                </div>
               </div>
             </motion.div>
           )}
