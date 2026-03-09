@@ -103,6 +103,7 @@ export default function App() {
   // Reminder Popup State
   const [dueDose, setDueDose] = useState<Dose | null>(null);
   const [lastPoppedKey, setLastPoppedKey] = useState<string>(''); // medId-time-date
+  const soundIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
   // Form State
   const [newName, setNewName] = useState('');
@@ -293,10 +294,10 @@ export default function App() {
             const diffMinutes = (now.getTime() - doseTime.getTime()) / (1000 * 60);
             
             // Trigger if:
-            // 1. It's past the time but within the last 2 minutes (catch-up)
+            // 1. It's past the time
             // 2. AND it's not taken
             // 3. AND it hasn't been popped in this session
-            if (diffMinutes >= 0 && diffMinutes < 2 && !takenDoseKeys.includes(doseId) && lastPoppedKey !== doseId) {
+            if (diffMinutes >= 0 && !takenDoseKeys.includes(doseId) && lastPoppedKey !== doseId) {
               const dose: Dose = {
                 id: doseId,
                 medicineId: med.id,
@@ -314,16 +315,39 @@ export default function App() {
               };
               setDueDose(dose);
               setLastPoppedKey(doseId);
-              playReminderSound(med.reminderSound);
+              startAlerting(med.reminderSound);
             }
           });
         }
       });
     };
 
-    const interval = setInterval(checkDoses, 10000); // Check every 10 seconds
+    const interval = setInterval(checkDoses, 5000); // Check every 5 seconds
     return () => clearInterval(interval);
   }, [medicines, takenDoseKeys, lastPoppedKey]);
+
+  const startAlerting = (sound: ReminderSound) => {
+    // Stop any existing alerting
+    if (soundIntervalRef.current) clearInterval(soundIntervalRef.current);
+    
+    // Initial alert
+    playReminderSound(sound);
+    if (navigator.vibrate) navigator.vibrate([500, 200, 500]);
+
+    // Repeat every 4 seconds until dismissed
+    soundIntervalRef.current = setInterval(() => {
+      playReminderSound(sound);
+      if (navigator.vibrate) navigator.vibrate([500, 200, 500]);
+    }, 4000);
+  };
+
+  const stopAlerting = () => {
+    if (soundIntervalRef.current) {
+      clearInterval(soundIntervalRef.current);
+      soundIntervalRef.current = null;
+    }
+    if (navigator.vibrate) navigator.vibrate(0);
+  };
 
   const playReminderSound = (sound: ReminderSound) => {
     try {
@@ -1344,24 +1368,31 @@ export default function App() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-indigo-900/90 backdrop-blur-md z-[100] flex items-center justify-center p-6"
+            className="fixed inset-0 bg-red-900/90 backdrop-blur-md z-[100] flex items-center justify-center p-6"
           >
             <motion.div
               initial={{ scale: 0.8, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
+              animate={{ 
+                scale: [1, 1.02, 1],
+                transition: { repeat: Infinity, duration: 2 }
+              }}
               exit={{ scale: 0.8, y: 20 }}
-              className="bg-white w-full max-w-sm rounded-[3rem] p-8 shadow-2xl text-center space-y-8"
+              className="bg-white w-full max-w-sm rounded-[3rem] p-8 shadow-2xl text-center space-y-8 border-4 border-red-500"
             >
               <div className="flex flex-col items-center space-y-4">
-                <div className="w-24 h-24 bg-indigo-100 rounded-full flex items-center justify-center animate-bounce">
-                  <Bell size={48} className="text-indigo-600" />
-                </div>
+                <motion.div 
+                  animate={{ scale: [1, 1.2, 1] }}
+                  transition={{ repeat: Infinity, duration: 1 }}
+                  className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center"
+                >
+                  <Bell size={48} className="text-red-600" />
+                </motion.div>
                 <h2 className="text-3xl font-black text-slate-900 leading-tight">Time for Medicine!</h2>
-                <p className="text-slate-500 font-bold text-lg">It's {dueDose.time}</p>
+                <p className="text-red-600 font-black text-xl animate-pulse">It's {dueDose.time}</p>
               </div>
 
-              <div className="bg-slate-50 rounded-[2rem] p-6 border-2 border-indigo-50 flex items-center gap-4 text-left">
-                <div className="w-20 h-20 rounded-2xl bg-white flex-shrink-0 overflow-hidden flex items-center justify-center border border-indigo-100">
+              <div className="bg-slate-50 rounded-[2rem] p-6 border-2 border-red-50 flex items-center gap-4 text-left">
+                <div className="w-20 h-20 rounded-2xl bg-white flex-shrink-0 overflow-hidden flex items-center justify-center border border-red-100">
                   {dueDose.image ? (
                     <img src={dueDose.image} alt={dueDose.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                   ) : (
@@ -1370,10 +1401,10 @@ export default function App() {
                 </div>
                 <div>
                   <h3 className="text-xl font-bold text-slate-900">{dueDose.name}</h3>
-                  <p className="text-indigo-600 font-black">{dueDose.dosage}</p>
+                  <p className="text-red-600 font-black">{dueDose.dosage}</p>
                   <p className="text-slate-400 text-xs font-bold uppercase mt-1">{dueDose.usage}</p>
                   {dueDose.additionalInstructions && (
-                    <div className="mt-2 p-3 bg-indigo-50/50 rounded-xl border border-indigo-100/50">
+                    <div className="mt-2 p-3 bg-red-50/50 rounded-xl border border-red-100/50">
                       <p className="text-slate-600 text-[11px] italic leading-relaxed">
                         "{dueDose.additionalInstructions}"
                       </p>
@@ -1387,16 +1418,37 @@ export default function App() {
                   onClick={() => {
                     toggleTaken(dueDose.id);
                     setDueDose(null);
+                    stopAlerting();
                   }}
-                  className="w-full bg-indigo-600 text-white py-5 rounded-3xl text-xl font-bold shadow-xl shadow-indigo-200 active:scale-95 transition-all"
+                  className="w-full bg-emerald-600 text-white py-5 rounded-3xl text-xl font-bold shadow-xl shadow-emerald-200 active:scale-95 transition-all"
                 >
                   I've Taken It
                 </button>
                 <button 
-                  onClick={() => setDueDose(null)}
+                  onClick={async () => {
+                    const med = medicines.find(m => m.id === dueDose.medicineId);
+                    if (med) {
+                      const snoozeTime = new Date();
+                      snoozeTime.setMinutes(snoozeTime.getMinutes() + 5);
+                      
+                      await LocalNotifications.schedule({
+                        notifications: [{
+                          title: `⏰ Snoozed: ${med.name}`,
+                          body: `Reminder for ${med.dosage} was snoozed for 5 minutes.`,
+                          id: Math.floor(Math.random() * 1000000),
+                          schedule: { at: snoozeTime, allowWhileIdle: true },
+                          sound: 'res://default',
+                          channelId: 'medication-reminders',
+                          extra: { medId: med.id, time: dueDose.time, date: dueDose.date }
+                        }]
+                      });
+                    }
+                    setDueDose(null);
+                    stopAlerting();
+                  }}
                   className="w-full bg-slate-100 text-slate-500 py-4 rounded-3xl text-lg font-bold active:scale-95 transition-all"
                 >
-                  Remind me later
+                  Snooze (5 mins)
                 </button>
               </div>
             </motion.div>
