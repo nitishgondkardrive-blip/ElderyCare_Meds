@@ -16,7 +16,8 @@ import {
   CalendarDays,
   History as HistoryIcon,
   Volume2,
-  Pencil
+  Pencil,
+  Search
 } from 'lucide-react';
 import { 
   Medicine, 
@@ -119,6 +120,15 @@ export default function App() {
   
   const [newScheduleType, setNewScheduleType] = useState<ScheduleType>('Every Day');
   const [newSpecificDays, setNewSpecificDays] = useState<number[]>([1, 2, 3, 4, 5]);
+  
+  // History Filter State
+  const [historySearch, setHistorySearch] = useState('');
+  const [historyStartDate, setHistoryStartDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7); // Default to last 7 days
+    return d.toISOString().split('T')[0];
+  });
+  const [historyEndDate, setHistoryEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [newInterval, setNewInterval] = useState<number>(2);
   const [newStartDate, setNewStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [newEndDateType, setNewEndDateType] = useState<'Duration' | 'Date'>('Duration');
@@ -428,6 +438,26 @@ export default function App() {
       } else if (sound === 'Digital') {
         playNote(1200, 0, 0.1, 'square', 0.1);
         playNote(1200, 0.15, 0.1, 'square', 0.1);
+      } else if (sound === 'Gentle') {
+        playNote(329.63, 0, 0.8, 'sine', 0.1); // E4
+        playNote(392.00, 0.2, 0.8, 'sine', 0.1); // G4
+      } else if (sound === 'Piano') {
+        playNote(523.25, 0, 0.6, 'sine', 0.2); // C5
+        playNote(587.33, 0.1, 0.6, 'sine', 0.2); // D5
+        playNote(659.25, 0.2, 0.6, 'sine', 0.2); // E5
+        playNote(783.99, 0.3, 0.8, 'sine', 0.2); // G5
+      } else if (sound === 'Guitar') {
+        playNote(196.00, 0, 0.5, 'triangle', 0.2); // G3
+        playNote(246.94, 0.1, 0.5, 'triangle', 0.2); // B3
+        playNote(293.66, 0.2, 0.5, 'triangle', 0.2); // D4
+      } else if (sound === 'Zen') {
+        playNote(220.00, 0, 2.0, 'sine', 0.15); // A3
+        playNote(440.00, 0.5, 1.5, 'sine', 0.05); // A4
+      } else if (sound === 'Nature') {
+        playNote(1500, 0, 0.05, 'sine', 0.1);
+        playNote(1800, 0.05, 0.05, 'sine', 0.1);
+        playNote(1500, 0.1, 0.05, 'sine', 0.1);
+        playNote(1800, 0.15, 0.05, 'sine', 0.1);
       }
     } catch (e) {
       console.error('Audio generation failed:', e);
@@ -733,10 +763,49 @@ export default function App() {
     return allTodayDoses.filter(d => !d.taken).slice(0, 3);
   }, [allTodayDoses]);
 
-  // History (Taken today)
-  const historyDoses = useMemo(() => {
-    return allTodayDoses.filter(d => d.taken);
-  }, [allTodayDoses]);
+  // History (Filtered)
+  const filteredHistory = useMemo(() => {
+    const doses: Dose[] = [];
+    
+    takenDoseKeys.forEach(key => {
+      const parts = key.split('-');
+      // Handle case where medId might contain hyphens (though Date.now().toString() shouldn't)
+      // Actually medId is Date.now().toString() which is numeric string.
+      const medId = parts[0];
+      const time = parts[1];
+      const date = parts[2];
+      
+      const med = medicines.find(m => m.id === medId);
+      
+      if (med) {
+        const matchesSearch = med.name.toLowerCase().includes(historySearch.toLowerCase());
+        const matchesDate = date >= historyStartDate && date <= historyEndDate;
+        
+        if (matchesSearch && matchesDate) {
+          doses.push({
+            id: key,
+            medicineId: med.id,
+            name: med.name,
+            dosage: med.dosage,
+            time: time,
+            timeOfDay: getTimeOfDay(time),
+            image: med.image,
+            shape: med.shape,
+            color: med.color,
+            usage: med.usage,
+            taken: true,
+            date: date,
+            additionalInstructions: med.additionalInstructions
+          });
+        }
+      }
+    });
+    
+    return doses.sort((a, b) => {
+      if (a.date !== b.date) return b.date.localeCompare(a.date);
+      return b.time.localeCompare(a.time);
+    });
+  }, [takenDoseKeys, medicines, historySearch, historyStartDate, historyEndDate]);
 
   const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -865,16 +934,74 @@ export default function App() {
               exit={{ opacity: 0, x: -20 }}
               className="space-y-6"
             >
+              {/* Filters */}
+              <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100 space-y-4">
+                <div className="relative">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                  <input 
+                    type="text" 
+                    placeholder="Search medicine name..." 
+                    value={historySearch}
+                    onChange={(e) => setHistorySearch(e.target.value)}
+                    className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 focus:bg-white rounded-2xl py-3 pl-12 pr-12 text-sm font-medium outline-none transition-all"
+                  />
+                  {historySearch && (
+                    <button 
+                      onClick={() => setHistorySearch('')}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">From</label>
+                    <input 
+                      type="date" 
+                      value={historyStartDate}
+                      onChange={(e) => setHistoryStartDate(e.target.value)}
+                      className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 focus:bg-white rounded-xl p-2 text-xs font-bold outline-none transition-all"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">To</label>
+                    <input 
+                      type="date" 
+                      value={historyEndDate}
+                      onChange={(e) => setHistoryEndDate(e.target.value)}
+                      className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 focus:bg-white rounded-xl p-2 text-xs font-bold outline-none transition-all"
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div className="flex items-center justify-between px-1">
-                <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Taken Today</h2>
-                <span className="text-xs font-bold bg-emerald-50 text-emerald-600 px-2 py-1 rounded-lg">
-                  {historyDoses.length} doses
-                </span>
+                <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest">History</h2>
+                <div className="flex items-center gap-2">
+                  {(historySearch || historyStartDate !== new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] || historyEndDate !== new Date().toISOString().split('T')[0]) && (
+                    <button 
+                      onClick={() => {
+                        setHistorySearch('');
+                        const d = new Date();
+                        d.setDate(d.getDate() - 7);
+                        setHistoryStartDate(d.toISOString().split('T')[0]);
+                        setHistoryEndDate(new Date().toISOString().split('T')[0]);
+                      }}
+                      className="text-[10px] font-bold text-indigo-500 uppercase hover:text-indigo-700"
+                    >
+                      Reset Filters
+                    </button>
+                  )}
+                  <span className="text-xs font-bold bg-emerald-50 text-emerald-600 px-2 py-1 rounded-lg">
+                    {filteredHistory.length} doses
+                  </span>
+                </div>
               </div>
               
-              {historyDoses.length > 0 ? (
+              {filteredHistory.length > 0 ? (
                 <div className="grid gap-4">
-                  {historyDoses.map(dose => (
+                  {filteredHistory.map(dose => (
                     <div key={dose.id} className="bg-emerald-50/50 rounded-3xl p-5 border-2 border-emerald-100 flex items-center gap-4">
                       <div className="w-16 h-16 rounded-2xl bg-white flex-shrink-0 overflow-hidden flex items-center justify-center border border-emerald-100">
                         {dose.image ? (
@@ -903,7 +1030,7 @@ export default function App() {
               ) : (
                 <div className="flex flex-col items-center justify-center py-20 text-center space-y-4 opacity-50">
                   <HistoryIcon size={64} className="text-slate-300" />
-                  <p className="text-slate-500 font-bold">No history for today yet.</p>
+                  <p className="text-slate-500 font-bold">No history found for these filters.</p>
                 </div>
               )}
             </motion.div>
@@ -1362,7 +1489,7 @@ export default function App() {
                 <section className="space-y-4">
                   <div className="flex items-center gap-2 text-slate-800"><Volume2 size={20} className="text-indigo-500" /><h3 className="text-lg font-bold">Reminder Sound</h3></div>
                   <div className="grid grid-cols-2 gap-3">
-                    {(['Chime', 'Bell', 'Soft Alert', 'Digital'] as ReminderSound[]).map((sound) => (
+                    {(['Chime', 'Bell', 'Soft Alert', 'Digital', 'Gentle', 'Piano', 'Guitar', 'Zen', 'Nature'] as ReminderSound[]).map((sound) => (
                       <button 
                         key={sound} 
                         type="button" 

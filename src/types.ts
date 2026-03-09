@@ -4,7 +4,7 @@ export type ScheduleType = 'Every Day' | 'Specific Days of Week' | 'Days Interva
 export type FrequencyType = 'Once Daily' | 'Twice Daily' | '3 Times a Day';
 export type PillShape = 'Round' | 'Oval' | 'Capsule';
 export type PillColor = 'Violet' | 'Indigo' | 'Blue' | 'Green' | 'Yellow' | 'Orange' | 'Red' | 'White' | 'Black';
-export type ReminderSound = 'Chime' | 'Bell' | 'Soft Alert' | 'Digital';
+export type ReminderSound = 'Chime' | 'Bell' | 'Soft Alert' | 'Digital' | 'Gentle' | 'Piano' | 'Guitar' | 'Zen' | 'Nature';
 
 export interface UserProfile {
   name: string;
