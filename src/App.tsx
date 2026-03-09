@@ -135,6 +135,10 @@ export default function App() {
   const [newDurationDays, setNewDurationDays] = useState<number>(7);
   const [newEndDate, setNewEndDate] = useState<string>('');
 
+  // Undo State
+  const [undoDose, setUndoDose] = useState<{ id: string, name: string } | null>(null);
+  const undoTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   const medFileInputRef = useRef<HTMLInputElement>(null);
   const profileFileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -644,8 +648,21 @@ export default function App() {
   const toggleTaken = (doseId: string) => {
     if (takenDoseKeys.includes(doseId)) {
       setTakenDoseKeys(takenDoseKeys.filter(k => k !== doseId));
+      if (undoDose?.id === doseId) setUndoDose(null);
     } else {
       setTakenDoseKeys([...takenDoseKeys, doseId]);
+      
+      // Find medicine name for the snackbar
+      const medId = doseId.split('-')[0];
+      const med = medicines.find(m => m.id === medId);
+      
+      if (med) {
+        setUndoDose({ id: doseId, name: med.name });
+        if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+        undoTimeoutRef.current = setTimeout(() => {
+          setUndoDose(null);
+        }, 5000);
+      }
     }
   };
 
@@ -1509,6 +1526,33 @@ export default function App() {
                 <button type="submit" className="w-full bg-indigo-600 text-white py-6 rounded-3xl text-xl font-bold shadow-xl shadow-indigo-100 active:scale-[0.98] transition-all sticky bottom-0">Save Reminder</button>
               </form>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Undo Snackbar */}
+      <AnimatePresence>
+        {undoDose && (
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className="fixed bottom-24 left-4 right-4 z-50"
+          >
+            <div className="bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center">
+                  <Check size={18} className="text-white" />
+                </div>
+                <p className="text-sm font-bold">Marked <span className="text-emerald-400">{undoDose.name}</span> as taken</p>
+              </div>
+              <button 
+                onClick={() => toggleTaken(undoDose.id)}
+                className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-colors"
+              >
+                Undo
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
