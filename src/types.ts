@@ -35,6 +35,7 @@ export interface Medicine {
   taken?: boolean;
   reminderSound: ReminderSound;
   additionalInstructions?: string;
+  createdAt: number;
 }
 
 export const TIME_OF_DAY_ORDER: TimeOfDay[] = ['Morning', 'Afternoon', 'Evening', 'Night'];

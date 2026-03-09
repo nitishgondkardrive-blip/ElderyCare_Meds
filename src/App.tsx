@@ -347,7 +347,8 @@ export default function App() {
             // 1. It's past the time
             // 2. AND it's not taken
             // 3. AND it hasn't been popped in this session
-            if (diffMinutes >= 0 && !takenDoseKeys.includes(doseId) && lastPoppedKey !== doseId) {
+            // 4. AND it was scheduled AFTER the medicine was created (prevents immediate popup for past doses)
+            if (diffMinutes >= 0 && !takenDoseKeys.includes(doseId) && lastPoppedKey !== doseId && doseTime.getTime() > (med.createdAt || 0)) {
               const dose: Dose = {
                 id: doseId,
                 medicineId: med.id,
@@ -564,7 +565,8 @@ export default function App() {
           endDate: newEndDateType === 'Date' ? newEndDate : undefined,
         },
         reminderSound: newReminderSound,
-        additionalInstructions: newAdditionalInstructions
+        additionalInstructions: newAdditionalInstructions,
+        createdAt: m.createdAt || Date.now()
       } : m));
     } else {
       const newMed: Medicine = {
@@ -589,7 +591,8 @@ export default function App() {
         },
         taken: false,
         reminderSound: newReminderSound,
-        additionalInstructions: newAdditionalInstructions
+        additionalInstructions: newAdditionalInstructions,
+        createdAt: Date.now()
       };
       setMedicines([...medicines, newMed]);
     }
@@ -1455,12 +1458,29 @@ export default function App() {
                       ))}
                     </div>
                     <div className="grid gap-3">
-                      {newTimes.map((time, idx) => (
-                        <div key={idx} className="flex items-center gap-3 bg-slate-50 p-4 rounded-2xl border-2 border-transparent focus-within:border-indigo-500 transition-all">
-                          <span className="text-slate-400 font-bold text-sm">Time {idx + 1}</span>
-                          <input type="time" value={time} onChange={(e) => updateTime(idx, e.target.value)} className="bg-transparent flex-1 text-lg font-bold outline-none" />
-                        </div>
-                      ))}
+                      {newTimes.map((time, idx) => {
+                        const isPastToday = newStartDate === new Date().toISOString().split('T')[0] && (() => {
+                          const [h, m] = time.split(':').map(Number);
+                          const d = new Date();
+                          d.setHours(h, m, 0, 0);
+                          return d.getTime() < Date.now();
+                        })();
+
+                        return (
+                          <div key={idx} className="space-y-2">
+                            <div className={`flex items-center gap-3 bg-slate-50 p-4 rounded-2xl border-2 transition-all ${isPastToday ? 'border-orange-200 bg-orange-50/30' : 'border-transparent focus-within:border-indigo-500'}`}>
+                              <span className="text-slate-400 font-bold text-sm">Time {idx + 1}</span>
+                              <input type="time" value={time} onChange={(e) => updateTime(idx, e.target.value)} className="bg-transparent flex-1 text-lg font-bold outline-none" />
+                              {isPastToday && <Info size={18} className="text-orange-400" />}
+                            </div>
+                            {isPastToday && (
+                              <p className="text-[10px] font-bold text-orange-500 uppercase tracking-wider ml-4">
+                                This time is in the past for today. Reminders will start from the next scheduled day.
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </section>
