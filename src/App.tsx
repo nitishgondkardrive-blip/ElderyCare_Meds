@@ -790,7 +790,7 @@ export default function App() {
       // Actually medId is Date.now().toString() which is numeric string.
       const medId = parts[0];
       const time = parts[1];
-      const date = parts[2];
+      const date = parts.slice(2).join('-');
       
       const med = medicines.find(m => m.id === medId);
       
@@ -991,6 +991,16 @@ export default function App() {
                     />
                   </div>
                 </div>
+                <button 
+                  className="w-full bg-indigo-600 text-white py-3 rounded-2xl text-sm font-bold shadow-md shadow-indigo-100 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                  onClick={() => {
+                    // Filtering is already automatic via useMemo, but this button provides visual feedback
+                    // and can be used to trigger a refresh if needed.
+                  }}
+                >
+                  <Search size={16} />
+                  Search History
+                </button>
               </div>
 
               <div className="flex items-center justify-between px-1">
